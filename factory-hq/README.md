@@ -1,10 +1,12 @@
-# 🏭 CYRUS TEAM — Factory HQ v2.0
+# 🏭 CYRUS TEAM — Factory HQ v2.1
 
 کارخونه ایجنت واقعی — نه ویترین. هر ایجنت یه ماژول پایتونه که واقعاً کار می‌کنه، و هیچ‌چیز بدون تأیید تو (Approve) اجرا نمی‌شه.
 
+**جدید در v2.1:** ➕ ۹ ایجنت واقعی جدید (جمعاً ۳۰) — از جمله نگهبان بکاپ، پیگیری هدف‌ها، مانیتور آپتایم و اعتبارسنجی برنامه سفر.
+
 **جدید در v2.0:** 🧠 حلقه یادگیری — هر ایجنت از تأیید/رد شدن‌هاش درس می‌گیره و دفعه بعد بهتر عمل می‌کنه. ایجنت‌های خلاق هم می‌تونن از هوش مصنوعی قوی (همون کلیدهای بات Cyrus AI) استفاده کنن.
 
-## ایجنت‌ها (۲۰ ایجنت واقعی)
+## ایجنت‌ها (۳۰ ایجنت واقعی)
 
 | ایجنت | دپارتمان | چیکار می‌کنه |
 |---|---|---|
@@ -28,6 +30,16 @@
 | Inbox Triage | OPS | دسته‌بندی اینباکس: فوری / بعداً / نادیده |
 | Deadline Guard | OPS | ددلاین‌های ۳۰ روز آینده (۷ روزه‌ها فوری) |
 | Nightly Reporter | OPS | پیش‌نویس خلاصه فارسی شبانه از لاگ فعالیت |
+| Market Scan | MARKET | قیمت زنده بازار (BTC، ETH، دلار/کانادا)؛ حرکت‌های بزرگ ۲۴ ساعته |
+| Uptime Monitor | OPS | چک زمان‌دار سلامت با لاگ دائمی؛ دان/کند بودن رو گزارش می‌ده |
+| Email Composer | OPS | پیش‌نویس ایمیل کاری کوتاه (فقط پیش‌نویس، ارسال نمی‌کنه) |
+| Backup Guard | OPS | بررسی بکاپ فایل‌های حیاتی؛ نبودن یا قدیمی بودن رو گزارش می‌ده |
+| Goal Tracker | OPS | پیگیری هدف‌های واقعی: عقب‌افتاده، نزدیک، آینده |
+| Knowledge Freshness | BRAIN | ادعاهای تاریخ‌مصرف‌دار فایل دانش که ممکنه کهنه شده باشن |
+| Itinerary Checker | QUALITY | اعتبارسنجی برنامه سفر: قیمت الکی، تلفن، وعده ویزا، شمارش روزها |
+| Social Caption | CONTENT | کپشن اینستاگرام + هشتگ (صادقانه، بدون ادعای الکی) |
+| Review Responder | SUPPORT | جواب کوتاه و صادقانه به نقد مشتری |
+| WhatsApp Drafter | MARKETING | پیش‌نویس پیام همگانی واتس‌اپ با CTA هوش مصنوعی Cyrus |
 
 ## 🧠 حلقه یادگیری (Learning Loop) — چطور ایجنت‌ها «باهوش‌تر» می‌شن
 
@@ -42,7 +54,7 @@
 
 ## 🤖 هوش مصنوعی قوی برای ایجنت‌های خلاق (اختیاری)
 
-۸ ایجنت خلاق/قضاوتی (Idea Maker، Ads Angles، FAQ Builder، Nightly Reporter، Content Writer، Support Tone، SEO Writer، Testimonial Drafter) می‌تونن از یه AI قوی استفاده کنن. **کلید جدید لازم نیست** — از همون کلیدهایی که بات Cyrus AI رو روشن می‌کنن استفاده کن:
+۱۱ ایجنت خلاق/قضاوتی (Idea Maker، Ads Angles، FAQ Builder، Nightly Reporter، Content Writer، Support Tone، SEO Writer، Testimonial Drafter، Social Caption، Email Composer، WhatsApp Drafter) می‌تونن از یه AI قوی استفاده کنن. **کلید جدید لازم نیست** — از همون کلیدهایی که بات Cyrus AI رو روشن می‌کنن استفاده کن:
 
 1. فایل `.env.example` رو کپی کن به اسم `.env` (توی همین پوشه factory)
 2. کلید موجودت رو بذار: `ANTHROPIC_API_KEY=...` (اول این امتحان می‌شه، بعد OpenAI)
@@ -68,7 +80,7 @@ python3 -m venv venv
 
 ## API
 - `GET /api/status` — وضعیت کارخونه
-- `GET /api/agents` — لیست ۲۰ ایجنت
+- `GET /api/agents` — لیست ۳۰ ایجنت
 - `POST /api/run/<agent_id>` — اجرای ایجنت (بعضی‌ها ورودی JSON می‌گیرن: topic/text/message/reply)
 - `GET /api/approvals` — صف تأیید
 - `POST /api/approvals/<id>/approve` یا `/reject` — با body اختیاری `{"note": "..."}` برای درس دادن به ایجنت
