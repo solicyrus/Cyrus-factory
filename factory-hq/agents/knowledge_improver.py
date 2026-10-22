@@ -11,6 +11,8 @@ Returns stats and proposes an approval if a hard rule looks missing.
 import os
 import re
 
+from agents.learn import get_lessons, log_run
+
 KNOWLEDGE_FILE = os.path.expanduser(
     "~/workspace/your_files/knowledge-update/victoria-knowledge.txt"
 )
@@ -24,6 +26,7 @@ HARD_RULES = {
 
 
 def run():
+    lessons = get_lessons("knowledge_improver")
     try:
         with open(KNOWLEDGE_FILE, encoding="utf-8") as f:
             text = f.read()
@@ -56,10 +59,13 @@ def run():
                        ". Approve to queue a knowledge-merge strengthening task."),
         })
 
+    summary = (f"{len(text)} bytes, sections {''.join(sections)}, "
+               f"hard rules {sum(rule_hits.values())}/{len(rule_hits)} present")
+    run_id = log_run("knowledge_improver", "inspect staged knowledge file", summary)
     return {
         "ok": not missing and sections == list("ABCDEFGHIJKLMN"),
-        "summary": (f"{len(text)} bytes, sections {''.join(sections)}, "
-                    f"hard rules {sum(rule_hits.values())}/{len(rule_hits)} present"),
-        "details": stats,
+        "summary": summary,
+        "details": {"stats": stats, "run_id": run_id,
+                    "lessons_seen": lessons["outcomes_seen"]},
         "proposed_approvals": proposed,
     }
