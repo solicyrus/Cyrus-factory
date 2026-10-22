@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYRUS TEAM - Factory HQ</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050712; color:#e8eaf2; font-family:'Segoe UI',system-ui,sans-serif; }
+  .header { padding:22px 28px; border-bottom:1px solid #1c2340; display:flex; justify-content:space-between; align-items:center; }
+  .logo { font-size:15px; font-weight:800; letter-spacing:2px; }
+  .logo span { color:#10b981; }
+  .badge { background:#10b98120; color:#10b981; border:1px solid #10b98155; padding:5px 14px; border-radius:20px; font-size:12px; font-weight:700; }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px; }
+  h2 { font-size:14px; letter-spacing:2px; color:#8b93b8; margin:26px 0 12px; text-transform:uppercase; }
+  .depts { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+  .dept { background:#0b1026; border:1px solid #1c2340; border-radius:12px; padding:16px; }
+  .dept .n { font-size:26px; font-weight:800; color:#10b981; }
+  .dept .t { font-size:13px; color:#8b93b8; letter-spacing:1px; }
+  .agents { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+  .agent { background:#0b1026; border:1px solid #1c2340; border-radius:12px; padding:18px; }
+  .agent .nm { font-size:16px; font-weight:700; }
+  .agent .dp { font-size:11px; color:#10b981; letter-spacing:1px; margin:4px 0 8px; }
+  .agent .ds { font-size:13px; color:#aab2d5; min-height:56px; }
+  .agent .st { font-size:12px; color:#8b93b8; margin:8px 0; }
+  .agent .st b { color:#e8eaf2; }
+  .btn { background:#10b981; color:#04120c; border:0; padding:9px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:13px; }
+  .btn:disabled { opacity:.5; cursor:wait; }
+  .btn.ghost { background:transparent; color:#10b981; border:1px solid #10b98166; }
+  .btn.danger-ghost { background:transparent; color:#f87171; border:1px solid #f8717166; }
+  .appr { background:#0b1026; border:1px solid #1c2340; border-left:4px solid #f59e0b; border-radius:10px; padding:16px; margin-bottom:12px; }
+  .appr.done-ok { border-left-color:#10b981; opacity:.75; }
+  .appr.done-no { border-left-color:#f87171; opacity:.6; }
+  .appr .tt { font-weight:700; font-size:14px; }
+  .appr .meta { font-size:11px; color:#8b93b8; margin:4px 0 8px; }
+  .appr .dt { font-size:12px; color:#aab2d5; white-space:pre-wrap; margin-bottom:10px; }
+  .appr .row { display:flex; gap:10px; align-items:center; }
+  .pill { font-size:11px; padding:3px 10px; border-radius:12px; background:#f59e0b22; color:#f59e0b; font-weight:700; }
+  .pill.ok { background:#10b98122; color:#10b981; }
+  .pill.no { background:#f8717122; color:#f87171; }
+  .log { background:#070a18; border:1px solid #1c2340; border-radius:12px; padding:16px; font-size:12.5px; max-height:260px; overflow-y:auto; }
+  .log div { padding:5px 0; border-bottom:1px solid #141a33; color:#aab2d5; }
+  .log .t { color:#5b648c; margin-right:8px; }
+  .log .who { color:#10b981; font-weight:700; margin-right:8px; }
+  .topic { display:flex; gap:8px; margin-top:10px; }
+  .topic input { flex:1; background:#070a18; border:1px solid #1c2340; color:#e8eaf2; border-radius:8px; padding:8px 12px; font-size:13px; }
+  .foot { text-align:center; color:#5b648c; font-size:12px; padding:30px 0 10px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">CYRUS TEAM <span>— FACTORY HQ</span></div>
+  <div class="badge" id="mode">HUMAN-IN-THE-LOOP</div>
+</div>
+<div class="wrap">
+  <h2>Departments</h2>
+  <div class="depts" id="depts"></div>
+
+  <h2>Agents <span style="font-weight:400;text-transform:none;letter-spacing:0">(real — click Run)</span></h2>
+  <div class="agents" id="agents"></div>
+
+  <h2>Approval Queue</h2>
+  <div id="approvals"></div>
+
+  <h2>Activity Log</h2>
+  <div class="log" id="activity"></div>
+
+  <div class="foot">CYRUS TEAM Factory HQ v1.0 — nothing runs without your approve.</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+
+async function api(path, method='GET', body=null) {
+  const r = await fetch(path, {method, headers:{'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : null});
+  return r.json();
+}
+
+async function refresh() {
+  const [status, agents, approvals, activity] = await Promise.all([
+    api('/api/status'), api('/api/agents'), api('/api/approvals'), api('/api/activity')
+  ]);
+  $('mode').textContent = status.factory + ' · ' + status.version + ' · ' + status.approvals_pending + ' pending';
+
+  $('depts').innerHTML = Object.entries(status.departments).map(([d,n]) =>
+    `<div class="dept"><div class="n">${n}</div><div class="t">${d}</div></div>`).join('');
+
+  $('agents').innerHTML = Object.entries(agents).map(([id,a]) => `
+    <div class="agent">
+      <div class="nm">${a.name}</div><div class="dp">${a.department}</div>
+      <div class="ds">${a.description}</div>
+      <div class="st">status: <b>${a.status}</b>${a.last_run ? `<br>last run: ${a.last_run}<br>result: ${a.last_result||''}` : ''}</div>
+      ${id==='content_writer' ? `<div class="topic"><input id="topic-${id}" placeholder="Shorts topic…" value="hidden waterfall on Vancouver Island"></div>` : ''}
+      <button class="btn" onclick="runAgent('${id}', this)">▶ Run</button>
+    </div>`).join('');
+
+  $('approvals').innerHTML = approvals.length ? approvals.map(a => `
+    <div class="appr ${a.status==='approved'?'done-ok':a.status==='rejected'?'done-no':''}">
+      <div class="tt">${a.title}</div>
+      <div class="meta">${a.kind} · ${a.created}${a.decided ? ' · decided '+a.decided : ''}</div>
+      <div class="dt">${a.detail}</div>
+      <div class="row">
+        ${a.status==='pending'
+          ? `<button class="btn ghost" onclick="decide('${a.id}','approve')">✓ Approve</button>
+             <button class="btn danger-ghost" onclick="decide('${a.id}','reject')">✕ Reject</button>`
+          : `<span class="pill ${a.status==='approved'?'ok':'no'}">${a.status.toUpperCase()}</span>`}
+      </div>
+    </div>`).join('') : '<div style="color:#5b648c">Queue empty — all clear.</div>';
+
+  $('activity').innerHTML = activity.length ? activity.map(e =>
+    `<div><span class="t">${e.t}</span><span class="who">${e.actor}</span>${e.text}</div>`).join('')
+    : '<div style="color:#5b648c">No activity yet — run an agent.</div>';
+}
+
+async function runAgent(id, btn) {
+  btn.disabled = true; btn.textContent = 'Running…';
+  const body = id==='content_writer'
+    ? {topic: ($('topic-'+id)||{}).value || 'hidden gem in Victoria BC'} : null;
+  try { await api('/api/run/'+id, 'POST', body); } catch(e) { alert('Run failed: '+e); }
+  await refresh();
+}
+
+async function decide(id, action) {
+  await api(`/api/approvals/${id}/${action}`, 'POST');
+  await refresh();
+}
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
