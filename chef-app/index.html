@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Top 20 Chefs — Victoria's Luxury Home-Chef Marketplace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="phone">
+
+  <header class="app-header">
+    <h1>Top 20 Chefs</h1>
+    <div class="sub"><span>Curated for you</span><a class="link-gold" href="#" id="see-all">SEE ALL</a></div>
+  </header>
+  <hr class="gold-rule">
+
+  <main>
+    <!-- DISCOVER -->
+    <section id="view-discover" class="view active"></section>
+
+    <!-- SCHEDULE -->
+    <section id="view-schedule" class="view"></section>
+
+    <!-- CART -->
+    <section id="view-cart" class="view"></section>
+
+    <!-- PROFILE -->
+    <section id="view-profile" class="view"></section>
+  </main>
+
+  <!-- dish detail modal -->
+  <div class="modal-back" id="dish-back">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="grab"></div>
+      <button class="modal-close" id="dish-close" aria-label="Close">✕</button>
+      <div id="dish-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- order success modal -->
+  <div class="modal-back" id="done-back">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="grab"></div>
+      <div class="success-wrap" id="done-body"></div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" id="main-nav">
+    <button data-view="discover" class="active"><span class="ico">🧭</span>Discover</button>
+    <button data-view="schedule"><span class="ico">🗓️</span>Schedule</button>
+    <button data-view="cart"><span class="ico">🛍️</span>Cart<span class="cart-badge" id="cart-badge" hidden></span></button>
+    <button data-view="profile"><span class="ico">👤</span>Profile</button>
+  </nav>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/customer.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = window.CHEFAPP, API = window.CustomerAPI;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+
+  function userId() {
+    var n = (localStorage.getItem("chefapp_name") || "").trim();
+    return n ? "user-" + n.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "guest";
+  }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("show"); }, 2400);
+  }
+  function money(n) { return "$" + Number(n).toFixed(n % 1 ? 2 : 0); }
+
+  /* ---------- navigation ---------- */
+  var currentView = "discover";
+  document.querySelectorAll("#main-nav button").forEach(function (b) {
+    b.addEventListener("click", function () { showView(b.dataset.view); });
+  });
+  function showView(name) {
+    currentView = name;
+    document.querySelectorAll("#main-nav button").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.view === name);
+    });
+    document.querySelectorAll(".view").forEach(function (v) {
+      v.classList.toggle("active", v.id === "view-" + name);
+    });
+    if (name === "schedule") renderSchedule();
+    if (name === "cart") renderCart();
+    if (name === "profile") renderProfile();
+    window.scrollTo(0, 0);
+  }
+  $("see-all").addEventListener("click", function (e) { e.preventDefault(); showView("schedule"); });
+
+  function updateBadge(pop) {
+    var n = API.cartCount(), b = $("cart-badge");
+    b.hidden = n === 0; b.textContent = n;
+    if (pop && n > 0) {
+      b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+    }
+  }
+
+  /* ---------- discover ---------- */
+  function portionsHtml(sch) {
+    if (sch.portions_left <= 0) return '<div class="portions out">Sold out</div>';
+    if (sch.portions_left <= 3)
+      return '<div class="portions low">Only ' + sch.portions_left + ' left!</div>';
+    return '<div class="portions ok">' + sch.portions_left + ' portions available</div>';
+  }
+  function cardHtml(sch) {
+    var soldOut = sch.portions_left <= 0;
+    return '<article class="dish-card" data-sch="' + esc(sch.id) + '">' +
+      '<div class="dish-photo" style="background:' + sch.dish.gradient + '">' +
+        (soldOut ? '<div class="soldout-veil"><span>SOLD OUT</span></div>' : '') +
+        '<div class="day-pill">' + esc(sch.label) + '</div>' +
+        '<div class="emoji">' + sch.dish.emoji + '</div>' +
+      '</div>' +
+      '<div class="dish-body">' +
+        '<div class="chef-row"><div class="chef-avatar">' + sch.chef.emoji + '</div>' +
+        '<div class="who">By <b>' + esc(sch.chef.name) + '</b> · ' + esc(sch.chef.cuisine) + '</div></div>' +
+        '<div class="dish-meta"><h3 class="dish-name">' + esc(sch.dish.name) + '</h3>' +
+        '<div class="price"><span class="n">' + money(sch.dish.price) + '</span><span class="u">PER PORTION</span></div></div>' +
+        portionsHtml(sch) +
+      '</div></article>';
+  }
+  async function renderDiscover() {
+    var box = $("view-discover");
+    var schs = await API.listSchedules();
+    schs.sort(function (a, b) { return a.weekday - b.weekday; });
+    box.innerHTML = schs.map(cardHtml).join("");
+    box.querySelectorAll(".dish-card").forEach(function (c) {
+      c.addEventListener("click", function () { openDish(c.dataset.sch); });
+    });
+  }
+
+  /* ---------- dish modal ---------- */
+  var modalState = { scheduleId: null, dayId: null, qty: 1, dtype: "Delivery" };
+  async function openDish(scheduleId) {
+    var sch = await API.getSchedule(scheduleId);
+    if (!sch) return;
+    /* other days this dish is offered */
+    var all = await API.listSchedules();
+    var days = all.filter(function (s) { return s.dish_id === sch.dish_id; })
+                  .sort(function (a, b) { return a.weekday - b.weekday; });
+    modalState = { scheduleId: sch.id, dayId: sch.id, qty: 1, dtype: "Delivery", days: days };
+    renderModal();
+    $("dish-back").classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
+  function closeDish() {
+    $("dish-back").classList.remove("open");
+    document.body.style.overflow = "";
+  }
+  $("dish-close").addEventListener("click", closeDish);
+  $("dish-back").addEventListener("click", function (e) {
+    if (e.target === $("dish-back")) closeDish();
+  });
+
+  function renderModal() {
+    var m = modalState;
+    var sch = m.days.find(function (s) { return s.id === m.dayId; });
+    var soldOut = sch.portions_left <= 0;
+    var maxQ = Math.min(sch.portions_left, 8);
+    if (m.qty > maxQ) m.qty = Math.max(1, maxQ);
+    var total = sch.dish.price * m.qty;
+
+    $("dish-modal-body").innerHTML =
+      '<div class="modal-photo" style="background:' + sch.dish.gradient + '">' +
+        '<div class="emoji">' + sch.dish.emoji + '</div></div>' +
+      '<div class="modal-body">' +
+        '<h2>' + esc(sch.dish.name) + '</h2>' +
+        '<div class="price" style="text-align:left;margin:6px 0 0"><span class="n">' + money(sch.dish.price) + '</span> <span class="u" style="display:inline">PER PORTION</span></div>' +
+        '<p class="story">“' + esc(sch.dish.story) + '”</p>' +
+        '<div class="modal-chef"><div class="chef-avatar">' + sch.chef.emoji + '</div>' +
+          '<div class="t"><b>' + esc(sch.chef.name) + '</b><span>' + esc(sch.chef.cuisine) + ' cuisine · ' + esc(sch.chef.bio) + '</span></div></div>' +
+        '<div class="opt-label">Choose your day</div>' +
+        '<div class="day-chips">' + m.days.map(function (d) {
+            var dis = d.portions_left <= 0 ? "disabled" : "";
+            var on = d.id === m.dayId ? "on" : "";
+            return '<button data-day="' + esc(d.id) + '" class="' + on + '" ' + dis + '>' +
+              S.WEEKDAYS[d.weekday].slice(0, 3).toUpperCase() + ' · ' + d.portions_left + ' left</button>';
+          }).join("") + '</div>' +
+        '<div class="opt-label">Pickup or delivery</div>' +
+        '<div class="seg">' +
+          '<button data-dt="Pickup" class="' + (m.dtype === "Pickup" ? "on" : "") + '">🏠 Pickup</button>' +
+          '<button data-dt="Delivery" class="' + (m.dtype === "Delivery" ? "on" : "") + '">🛵 Delivery</button>' +
+        '</div>' +
+        '<div class="opt-label">Portions</div>' +
+        '<div class="qty-row"><button class="qty-btn" id="q-minus">−</button>' +
+        '<div class="qty-n" id="q-n">' + m.qty + '</div>' +
+        '<button class="qty-btn" id="q-plus">+</button>' +
+        '<div style="margin-left:auto">' + portionsHtml(sch) + '</div></div>' +
+      '</div>' +
+      '<div class="modal-foot"><div class="total-row"><span class="t">TOTAL</span>' +
+        '<span class="n" id="m-total">' + money(total) + '</span></div>' +
+        '<button class="btn btn-gold btn-block" id="m-add" ' + (soldOut ? "disabled" : "") + '>' +
+          (soldOut ? "Sold out" : "Pre-order · " + money(total)) + '</button></div>';
+
+    var body = $("dish-modal-body");
+    body.querySelectorAll("[data-day]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        m.dayId = b.dataset.day; m.qty = 1; renderModal();
+      });
+    });
+    body.querySelectorAll("[data-dt]").forEach(function (b) {
+      b.addEventListener("click", function () { m.dtype = b.dataset.dt; renderModal(); });
+    });
+    $("q-minus").addEventListener("click", function () {
+      if (m.qty > 1) { m.qty--; renderModal(); }
+    });
+    $("q-plus").addEventListener("click", function () {
+      if (m.qty < maxQ) { m.qty++; renderModal(); }
+      else toast("Only " + maxQ + " portions left for this day");
+    });
+    var add = $("m-add");
+    if (add && !soldOut) add.addEventListener("click", function () {
+      API.addToCart({ schedule_id: m.dayId, qty: m.qty, delivery_type: m.dtype });
+      updateBadge(true);
+      closeDish();
+      toast(m.qty + " × " + sch.dish.short_name + " added to cart");
+    });
+  }
+
+  /* ---------- schedule (week view) ---------- */
+  async function renderSchedule() {
+    var box = $("view-schedule");
+    var schs = await API.listSchedules();
+    var today = new Date();
+    var html = '<h2 class="section-title">This week</h2>';
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(today); d.setDate(today.getDate() + i);
+      var wd = d.getDay();
+      var daySchs = schs.filter(function (s) { return s.weekday === wd; });
+      var dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      var label = i === 0 ? "Today" : S.WEEKDAYS[wd];
+      html += '<div class="day-block"><div class="day-head"><h3>' + label + '</h3>' +
+              '<span class="date">' + dateStr + '</span></div>';
+      if (!daySchs.length) {
+        html += '<div class="empty-note">No menus this day — check back soon.</div>';
+      } else {
+        daySchs.forEach(function (s) {
+          var pill = s.portions_left <= 0 ? "out" : (s.portions_left <= 3 ? "low" : "ok");
+          var txt = s.portions_left <= 0 ? "Sold out" : s.portions_left + " left";
+          html += '<div class="mini-row" data-sch="' + esc(s.id) + '" style="cursor:pointer">' +
+            '<div class="e">' + s.dish.emoji + '</div>' +
+            '<div class="t"><b>' + esc(s.dish.short_name) + '</b>' +
+            '<span>' + esc(s.chef.name) + ' · ' + money(s.dish.price) + '</span></div>' +
+            '<div class="cap-pill ' + pill + '">' + txt + '</div></div>';
+        });
+      }
+      html += "</div>";
+    }
+    box.innerHTML = html;
+    box.querySelectorAll(".mini-row").forEach(function (r) {
+      r.addEventListener("click", function () { openDish(r.dataset.sch); });
+    });
+  }
+
+  /* ---------- cart ---------- */
+  async function renderCart() {
+    var box = $("view-cart");
+    var cart = API.getCart();
+    if (!cart.length) {
+      box.innerHTML = '<h2 class="section-title">Your cart</h2>' +
+        '<div class="empty-note">Your cart is empty. Discover something delicious.</div>';
+      return;
+    }
+    var lines = "", total = 0;
+    for (var i = 0; i < cart.length; i++) {
+      var it = cart[i];
+      var sch = await API.getSchedule(it.schedule_id);
+      if (!sch) continue;
+      var line = sch.dish.price * it.qty; total += line;
+      var left = sch.portions_left;
+      lines += '<div class="cart-line"><div class="e">' + sch.dish.emoji + '</div>' +
+        '<div class="t"><b>' + esc(sch.dish.short_name) + '</b>' +
+        '<span>' + esc(sch.chef.name) + ' · ' + S.WEEKDAYS[sch.weekday] + ' · ' + esc(it.delivery_type) + '</span>' +
+        (it.qty > left ? '<span style="color:var(--danger);font-size:12px">Only ' + left + ' left now</span>' : '') +
+        '</div>' +
+        '<div class="qty"><button data-k="' + esc(it.key) + '" data-a="-">−</button>' +
+        '<b>' + it.qty + '</b><button data-k="' + esc(it.key) + '" data-a="+">+</button></div>' +
+        '<div style="text-align:right"><b>' + money(line) + '</b><br>' +
+        '<button class="rm" data-rm="' + esc(it.key) + '">✕</button></div></div>';
+    }
+    box.innerHTML = '<h2 class="section-title">Your cart</h2>' + lines +
+      '<div class="cart-total"><span style="color:var(--muted);font-size:13px;letter-spacing:.14em">TOTAL</span>' +
+      '<span class="n">' + money(total) + '</span></div>' +
+      '<button class="btn btn-gold btn-block" id="checkout">💳 Pay ' + money(total) + ' with card</button>';
+    box.querySelectorAll("[data-a]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var key = b.dataset.k, a = b.dataset.a;
+        var cur = API.getCart().find(function (c) { return c.key === key; });
+        if (!cur) return;
+        var sch = await API.getSchedule(cur.schedule_id);
+        var nq = a === "+" ? cur.qty + 1 : cur.qty - 1;
+        if (nq < 1) { API.removeFromCart(key); }
+        else {
+          if (a === "+" && sch && nq > sch.portions_left) {
+            toast("Only " + sch.portions_left + " portions left"); return;
+          }
+          API.updateCartQty(key, nq);
+        }
+        updateBadge(false); renderCart();
+      });
+    });
+    box.querySelectorAll("[data-rm]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        API.removeFromCart(b.dataset.rm); updateBadge(false); renderCart();
+      });
+    });
+    $("checkout").addEventListener("click", checkout);
+  }
+
+  async function checkout() {
+    var cart = API.getCart();
+    if (!cart.length) return;
+    var btn = $("checkout");
+    btn.disabled = true; btn.textContent = "Reserving your portions…";
+    /* 1. reserve capacity first (atomic — never oversells) */
+    var allIds = [], failed = [], total = 0;
+    var receipt = { total_cents: 0, platform_fee_cents: 0, chef_payout_cents: 0 };
+    for (var i = 0; i < cart.length; i++) {
+      var it = cart[i];
+      var sch0 = await API.getSchedule(it.schedule_id);
+      if (sch0) total += sch0.dish.price * it.qty;
+      var r = await API.placeOrder({
+        user_id: userId(), schedule_id: it.schedule_id,
+        delivery_type: it.delivery_type, qty: it.qty
+      });
+      if (r.ok) {
+        allIds = allIds.concat(r.order_ids);
+        if (r.receipt) {
+          receipt.total_cents += r.receipt.total_cents || 0;
+          receipt.platform_fee_cents += r.receipt.platform_fee_cents || 0;
+          receipt.chef_payout_cents += r.receipt.chef_payout_cents || 0;
+        }
+      }
+      else {
+        var sch = await API.getSchedule(it.schedule_id);
+        failed.push((sch ? sch.dish.short_name : "item") + " (sold out)");
+      }
+    }
+    API.clearCart(); updateBadge(false);
+    renderDiscover(); /* refresh sold counts */
+    btn.disabled = false;
+    if (!allIds.length) { showOrderResult([], failed, false, receipt); return; }
+    /* 2. take payment */
+    var cents = Math.round(total * 100);
+    var base = window.location.origin + window.location.pathname;
+    try {
+      var co = await API.startCheckout({
+        order_ids: allIds,
+        amount_cents: cents,
+        currency: "cad",
+        success_url: base + "?paid=1&session_id={CHECKOUT_SESSION_ID}",
+        cancel_url: base + "?canceled=1"
+      });
+      if (co.demo) {
+        window.__lastReceipt = receipt;
+        showDemoCheckout(allIds, total, failed);   /* simulated card page */
+      } else if (co.url) {
+        window.location.href = co.url;            /* Stripe hosted page */
+      }
+    } catch (e) {
+      toast("Payment setup failed — your portions are reserved");
+      showOrderResult(allIds, failed, false, receipt);
+    }
+  }
+
+  /* DEMO checkout page: styled like the app, clearly labeled DEMO.
+     No real charge — marks the demo orders Confirmed on "pay". */
+  function showDemoCheckout(orderIds, total, failed) {
+    var html = '<div class="big">💳</div>' +
+      "<h2>Demo checkout</h2>" +
+      '<p style="color:var(--gold);font-size:12px;letter-spacing:.18em">DEMO MODE — NO REAL CHARGE</p>' +
+      '<div class="field"><label>Card number</label>' +
+      '<input class="input" id="demo-cc" inputmode="numeric" placeholder="4242 4242 4242 4242" value="4242 4242 4242 4242"></div>' +
+      '<div style="display:flex;gap:10px">' +
+      '<div class="field" style="flex:1"><label>Expiry</label>' +
+      '<input class="input" id="demo-exp" placeholder="12/28" value="12/28"></div>' +
+      '<div class="field" style="flex:1"><label>CVC</label>' +
+      '<input class="input" id="demo-cvc" inputmode="numeric" placeholder="123" value="123"></div></div>' +
+      '<button class="btn btn-gold btn-block" id="demo-pay">Pay ' + money(total) + '</button>' +
+      '<div style="margin-top:10px"><button class="btn btn-ghost btn-block" id="demo-cancel">Cancel</button></div>';
+    $("done-body").innerHTML = html;
+    $("done-back").classList.add("open");
+    $("demo-cancel").addEventListener("click", function () {
+      $("done-back").classList.remove("open");
+      showView("discover");
+    });
+    $("demo-pay").addEventListener("click", function () {
+      var b = $("demo-pay");
+      b.disabled = true; b.textContent = "Processing…";
+      setTimeout(function () {
+        API.demoConfirmPayment(orderIds);
+        showOrderResult(orderIds, failed, true, window.__lastReceipt);
+      }, 900);
+    });
+  }
+
+  function showOrderResult(allIds, failed, paid, receipt) {
+    var html = '<div class="big">' + (failed.length && !allIds.length ? "⚠️" : "🎉") + "</div>" +
+      "<h2>" + (paid ? "Payment successful" : "Order confirmed") + "</h2>";
+    if (allIds.length) {
+      html += paid
+        ? "<p>Paid! The kitchen has been notified.</p>"
+        : "<p>Your pre-order is in. The kitchen has been notified.</p>";
+      html += allIds.map(function (id) {
+        return '<span class="ord-chip">' + esc(id.toUpperCase()) + "</span>";
+      }).join("");
+    }
+    if (receipt && receipt.total_cents) {
+      html += '<p style="font-size:15px">Total charged: <b style="color:var(--gold)">' +
+        money(receipt.total_cents / 100) + "</b></p>";
+    }
+    if (failed.length) {
+      html += "<p>Sold out before checkout: " + esc(failed.join(", ")) + "</p>";
+    }
+    html += '<div style="margin-top:22px"><button class="btn btn-gold btn-block" id="done-ok">Back to Discover</button></div>';
+    $("done-body").innerHTML = html;
+    $("done-back").classList.add("open");
+    $("done-ok").addEventListener("click", function () {
+      $("done-back").classList.remove("open");
+      showView("discover");
+    });
+  }
+
+  /* ---------- profile ---------- */
+  async function renderProfile() {
+    var box = $("view-profile");
+    var name = localStorage.getItem("chefapp_name") || "";
+    var orders = await API.myOrders(userId());
+    var html = '<h2 class="section-title">Profile</h2>' +
+      '<div class="panel"><div class="field"><label>Your name</label>' +
+      '<input class="input" id="p-name" value="' + esc(name) + '" placeholder="e.g. Alex"></div>' +
+      '<button class="btn btn-ghost btn-sm" id="p-save">Save</button> ' +
+      '<span style="color:var(--faint);font-size:12px">Mode: ' + API.mode() + '</span></div>' +
+      '<h3 class="section-title" style="font-size:19px">Order history</h3>';
+    if (!orders.length) {
+      html += '<div class="empty-note">No orders yet.</div>';
+    } else {
+      orders.forEach(function (o) {
+        var d = o.schedule && o.schedule.dish ? o.schedule.dish : {};
+        html += '<div class="mini-row"><div class="e">' + (d.emoji || "🍽️") + '</div>' +
+          '<div class="t"><b>' + esc(d.short_name || "Dish") + '</b>' +
+          '<span>' + esc(o.id) + ' · ' + esc(o.delivery_type) + ' · ' +
+          new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+          '</span></div>' +
+          '<div class="status-pill ' + (o.status === "Confirmed" ? "confirmed" : "pending") + '">' +
+          esc(o.status).toUpperCase() + '</div></div>';
+      });
+    }
+    box.innerHTML = html;
+    $("p-save").addEventListener("click", function () {
+      localStorage.setItem("chefapp_name", $("p-name").value.trim());
+      toast("Saved"); renderProfile();
+    });
+  }
+
+  /* ---------- boot ---------- */
+  renderDiscover();
+  updateBadge(false);
+  /* returning from Stripe? ?paid=1&session_id=... or ?canceled=1 */
+  API.confirmOrderFromSession().then(function (sess) {
+    if (!sess) return;
+    if (sess.canceled) toast("Payment canceled — nothing was charged");
+    else if (sess.ok) showOrderResult([], [], true);
+  });
+})();
+</script>
+</body>
+</html>
