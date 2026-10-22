@@ -1,8 +1,8 @@
-"""CYRUS TEAM — Factory HQ brain v2.0.
+"""CYRUS TEAM — Factory HQ brain v2.1.
 
 A small, honest agent factory: a registry of REAL agents (Python modules
 that do actual work), departments, a human-in-the-loop approval queue, and
-an activity log. v2.0 adds the LEARNING LOOP: every agent reads its past
+an activity log. v2.1: 30 real agents. v2.0 added the LEARNING LOOP: every agent reads its past
 outcomes before running (agents/learn.py), and every approve/reject teaches
 the agent that produced the draft. Creative agents can also use a shared
 LLM backend (agents/llm.py) when API keys are set - otherwise they fall
@@ -21,7 +21,7 @@ from agents import learn
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE, "factory_state.json")
-VERSION = "v2.0"
+VERSION = "v2.1"
 
 app = Flask(__name__)
 
@@ -47,6 +47,15 @@ AGENT_MODULES = {
     "testimonial_drafter": "agents.testimonial_drafter",
     "faq_builder": "agents.faq_builder",
     "nightly_reporter": "agents.nightly_reporter",
+    "uptime_monitor": "agents.uptime_monitor",
+    "knowledge_freshness": "agents.knowledge_freshness",
+    "itinerary_checker": "agents.itinerary_checker",
+    "social_caption": "agents.social_caption",
+    "email_composer": "agents.email_composer",
+    "backup_guard": "agents.backup_guard",
+    "goal_tracker": "agents.goal_tracker",
+    "review_responder": "agents.review_responder",
+    "whatsapp_drafter": "agents.whatsapp_drafter",
 }
 
 # Which JSON body keys each agent accepts on POST /api/run/<agent>
@@ -58,6 +67,11 @@ AGENT_PARAMS = {
     "pricing_guard": ["text"],
     "market_scan": ["symbols"],
     "seo_writer": ["topic"],
+    "itinerary_checker": ["text"],
+    "social_caption": ["topic"],
+    "email_composer": ["to", "subject", "purpose"],
+    "review_responder": ["reviewer_name", "rating", "text"],
+    "whatsapp_drafter": ["topic"],
 }
 
 # (id, display name, department, description)
@@ -104,6 +118,24 @@ AGENT_DEFS = [
      "Lists business deadlines within 30 days; urgent ones within 7."),
     ("nightly_reporter", "Nightly Reporter", "OPS",
      "Composes the nightly Persian business summary draft from the activity log."),
+    ("uptime_monitor", "Uptime Monitor", "OPS",
+     "Timed health checks with a persistent log; flags downtime and slow responses."),
+    ("email_composer", "Email Composer", "OPS",
+     "Drafts a short professional business email (draft only, never sends)."),
+    ("backup_guard", "Backup Guard", "OPS",
+     "Verifies backup copies exist for critical files; flags missing or stale ones."),
+    ("goal_tracker", "Goal Tracker", "OPS",
+     "Tracks Cyrus's real business goals: overdue, due soon, upcoming."),
+    ("knowledge_freshness", "Knowledge Freshness", "BRAIN",
+     "Finds time-sensitive claims in the staged knowledge file that may be stale."),
+    ("itinerary_checker", "Itinerary Checker", "QUALITY",
+     "Validates an itinerary: invented prices, phone numbers, visa promises, day counts."),
+    ("social_caption", "Social Caption", "CONTENT",
+     "Drafts an Instagram caption + hashtags (honest, no fake claims)."),
+    ("review_responder", "Review Responder", "SUPPORT",
+     "Drafts a short honest reply to a customer review."),
+    ("whatsapp_drafter", "WhatsApp Drafter", "MARKETING",
+     "Drafts a short WhatsApp broadcast with a Cyrus AI CTA (draft only)."),
 ]
 
 
@@ -291,5 +323,5 @@ def api_activity():
 
 
 if __name__ == "__main__":
-    print("CYRUS TEAM - Factory HQ v2.0 on http://localhost:5050")
+    print("CYRUS TEAM - Factory HQ v2.1 on http://localhost:5050")
     app.run(host="127.0.0.1", port=5050, debug=False)
