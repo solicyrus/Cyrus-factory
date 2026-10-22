@@ -133,7 +133,10 @@ window.CHEFAPP.seed = {
 
 window.CHEFAPP.CHECK_LABELS = {
   foodsafe: "FoodSafe Level 1",
-  island_health: "Island Health kitchen approval",
+  approved_kitchen: "Approved commercial/commissary kitchen (no home kitchens)",
+  island_health: "Island Health operating permit",
+  business_licence: "City of Victoria business licence",
   insurance: "Liability insurance",
+  labels: "CFIA-compliant labels (allergens, bilingual)",
   tasting: "Tasting session with Cyrus"
 };
