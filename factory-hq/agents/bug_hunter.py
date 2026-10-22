@@ -13,6 +13,8 @@ import os
 import re
 import urllib.request
 
+from agents.learn import get_lessons, log_run
+
 TIMEOUT = 15
 APP_HOME = "https://app.victoriatourandadventure.com/"
 APP_SW = "https://app.victoriatourandadventure.com/sw.js"
@@ -29,6 +31,7 @@ def _get(url):
 
 
 def run():
+    lessons = get_lessons("bug_hunter")
     findings = []
     failures = []
 
@@ -97,9 +100,12 @@ def run():
             "detail": "Found by Bug Hunter live check. Approve to assign a fix task, reject to dismiss.",
         })
 
+    summary = f"{len([x for x in findings if x['ok']])}/{len(findings)} checks passed"
+    run_id = log_run("bug_hunter", "live health checks", summary)
     return {
         "ok": not failures,
-        "summary": f"{len([x for x in findings if x['ok']])}/{len(findings)} checks passed",
-        "details": findings,
+        "summary": summary,
+        "details": {"findings": findings, "run_id": run_id,
+                    "lessons_seen": lessons["outcomes_seen"]},
         "proposed_approvals": proposed_approvals,
     }
