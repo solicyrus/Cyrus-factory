@@ -32,6 +32,7 @@ AGENT_MODULES = {
     "idea_maker": "agents.idea_maker",
     "support_tone": "agents.support_tone",
     "market_analyst": "agents.market_analyst",
+    "market_scan": "agents.market_scan",
     "translator_check": "agents.translator_check",
     "ads_angles": "agents.ads_angles",
     "deploy_checker": "agents.deploy_checker",
@@ -55,6 +56,7 @@ AGENT_PARAMS = {
     "market_analyst": ["text"],
     "qa_tester": ["text"],
     "pricing_guard": ["text"],
+    "market_scan": ["symbols"],
     "seo_writer": ["topic"],
 }
 
@@ -86,6 +88,8 @@ AGENT_DEFS = [
      "Drafts 3 FAQ entries with honest short answers for Cyrus AI."),
     ("market_analyst", "Market Analyst", "MARKET",
      "Flags price inconsistencies in text against the real prices catalog."),
+    ("market_scan", "Market Scan", "MARKET",
+     "Live market data (BTC, ETH, USD/CAD) from Yahoo Finance; flags big 24h moves."),
     ("review_watcher", "Review Watcher", "MARKET",
      "Flags negative/urgent reviews needing a reply, with a reply template."),
     ("competitor_watch", "Competitor Watch", "MARKET",
