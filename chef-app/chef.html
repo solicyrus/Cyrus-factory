@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chef Hub — Top 20 Chefs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back-link" href="index.html">← APP</a>
+    <h2>Chef Hub</h2>
+  </div>
+  <hr class="gold-rule">
+
+  <div class="page-pad">
+    <div class="field">
+      <label>I am</label>
+      <select class="input" id="chef-pick"></select>
+    </div>
+
+    <div id="chef-head"></div>
+
+    <h3 class="section-title">Earnings</h3>
+    <div class="panel" id="earnings"></div>
+
+    <h3 class="section-title">This week's schedule</h3>
+    <div id="sched-list"></div>
+
+    <div class="panel">
+      <h3>Add a menu day</h3>
+      <div class="field"><label>Dish</label><select class="input" id="ns-dish"></select></div>
+      <div class="field"><label>Day</label><select class="input" id="ns-day"></select></div>
+      <div class="field"><label>Portions (capacity)</label>
+        <input class="input" id="ns-cap" type="number" min="1" value="10"></div>
+      <button class="btn btn-gold btn-block" id="ns-add">Add to schedule</button>
+    </div>
+
+    <h3 class="section-title">Orders received</h3>
+    <div id="order-list"></div>
+
+    <h3 class="section-title">Verification</h3>
+    <div class="panel" id="checks"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/chef.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = window.CHEFAPP, API = window.ChefAPI;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var chefId = localStorage.getItem("chefapp_chef") || "chef-sara";
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("show"); }, 2400);
+  }
+  function money(n) { return "$" + Number(n).toFixed(n % 1 ? 2 : 0); }
+  function cents(c) { return "$" + (Number(c || 0) / 100).toFixed(2); }
+
+  async function boot() {
+    var chefs = await API.listChefs();
+    $("chef-pick").innerHTML = chefs.map(function (c) {
+      return '<option value="' + esc(c.id) + '"' +
+        (c.id === chefId ? " selected" : "") + ">" + esc(c.name) + " · " + esc(c.cuisine) + "</option>";
+    }).join("");
+    $("chef-pick").addEventListener("change", function () {
+      chefId = this.value;
+      localStorage.setItem("chefapp_chef", chefId);
+      renderAll();
+    });
+    var days = S.WEEKDAYS.map(function (d, i) {
+      return '<option value="' + i + '">' + d + "</option>";
+    }).join("");
+    $("ns-day").innerHTML = days;
+    $("ns-add").addEventListener("click", addSchedule);
+    renderAll();
+  }
+
+  async function renderAll() {
+    await Promise.all([renderHead(), renderEarnings(), renderSched(), renderOrders(), renderChecks()]);
+  }
+
+  async function renderEarnings() {
+    var e = await API.getEarnings(chefId);
+    var rate = await API.getCommissionRate(chefId);
+    var row = function (label, val, gold) {
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0">' +
+        '<span style="color:var(--muted)">' + label + "</span>" +
+        '<b style="' + (gold ? "color:var(--gold)" : "") + '">' + val + "</b></div>";
+    };
+    var html = row("Gross sales", cents(e.gross_cents)) +
+      row("Platform fee (" + Math.round(rate * 100) + "%)", "−" + cents(e.fee_cents)) +
+      row("Your payout", cents(e.payout_cents), true) +
+      row("Orders", e.order_count);
+    if (e.by_dish && e.by_dish.length) {
+      html += '<hr class="gold-rule" style="margin:10px 0">' +
+        e.by_dish.map(function (d) {
+          return '<div style="display:flex;justify-content:space-between;' +
+            'padding:4px 0;font-size:13px"><span>' + esc(d.name) + " × " + d.count +
+            "</span><b>" + cents(d.payout_cents) + "</b></div>";
+        }).join("");
+    }
+    $("earnings").innerHTML = html;
+  }
+
+  async function renderHead() {
+    var chef = await API.getChef(chefId);
+    var dishes = await API.myDishes(chefId);
+    $("ns-dish").innerHTML = dishes.map(function (d) {
+      return '<option value="' + esc(d.id) + '">' + esc(d.short_name) + "</option>";
+    }).join("");
+    var n = Object.keys(chef.checks || {}).filter(function (k) { return chef.checks[k]; }).length;
+    $("chef-head").innerHTML =
+      '<div class="panel"><div class="modal-chef" style="border:0;margin:0;padding:0">' +
+      '<div class="chef-avatar">' + chef.emoji + "</div>" +
+      '<div class="t"><b>' + esc(chef.name) + "</b><span>" + esc(chef.cuisine) +
+      " cuisine · " + n + "/4 verified</span></div></div></div>";
+  }
+
+  async function renderSched() {
+    var schs = await API.mySchedules(chefId);
+    var box = $("sched-list");
+    if (!schs.length) {
+      box.innerHTML = '<div class="empty-note">No menus scheduled yet — add one below.</div>';
+      return;
+    }
+    box.innerHTML = schs.map(function (s) {
+      return '<div class="panel" style="padding:12px 14px">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+        '<div style="font-size:28px">' + s.dish.emoji + "</div>" +
+        '<div style="flex:1"><b>' + esc(s.dish.short_name) + "</b><br>" +
+        '<span style="color:var(--muted);font-size:12px">' + S.WEEKDAYS[s.weekday] +
+        " · sold " + s.sold_count + " / " + s.max_capacity + "</span></div>" +
+        '<input class="input" type="number" min="0" value="' + s.max_capacity + '" ' +
+        'data-cap="' + esc(s.id) + '" style="width:76px;text-align:center">' +
+        '<button class="btn btn-gold btn-sm" data-save="' + esc(s.id) + '">Save</button>' +
+        "</div></div>";
+    }).join("");
+    box.querySelectorAll("[data-save]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var id = b.dataset.save;
+        var inp = box.querySelector('[data-cap="' + id + '"]');
+        var r = await API.setCapacity(id, inp.value);
+        if (r.ok) { toast("Capacity saved"); renderSched(); }
+        else if (r.reason === "below_sold") {
+          toast("Can't go below " + r.sold + " already sold");
+          inp.value = r.sold;
+        } else toast("Could not save");
+      });
+    });
+  }
+
+  async function addSchedule() {
+    var r = await API.addSchedule({
+      dish_id: $("ns-dish").value,
+      weekday: $("ns-day").value,
+      max_capacity: $("ns-cap").value
+    });
+    if (r.ok) { toast("Menu day added"); renderSched(); }
+    else toast("Could not add: " + (r.reason || "error"));
+  }
+
+  async function renderOrders() {
+    var orders = await API.incomingOrders(chefId);
+    var box = $("order-list");
+    if (!orders.length) {
+      box.innerHTML = '<div class="empty-note">No orders yet. They will appear here.</div>';
+      return;
+    }
+    box.innerHTML = orders.map(function (o) {
+      var confirmed = o.status === "Confirmed";
+      return '<div class="order-line"><div style="font-size:26px">' +
+        (o.dish.emoji || "🍽️") + '</div><div class="grow"><b>' +
+        esc(o.dish.short_name || "Dish") + " × " + (o.qty || 1) + "</b>" +
+        "<span>" + esc(o.day) + " · " + esc(o.delivery_type) + " · " +
+        esc(o.id) + " · " +
+        new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+        "</span></div>" +
+        (confirmed
+          ? '<div class="status-pill confirmed">CONFIRMED</div>'
+          : '<button class="btn btn-gold btn-sm" data-confirm="' + esc(o.id) + '">Confirm</button>') +
+        "</div>";
+    }).join("");
+    box.querySelectorAll("[data-confirm]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        await API.confirmOrder(b.dataset.confirm);
+        toast("Order confirmed"); renderOrders();
+      });
+    });
+  }
+
+  async function renderChecks() {
+    var checks = await API.getChecks(chefId);
+    var labels = S.CHECK_LABELS;
+    $("checks").innerHTML = Object.keys(labels).map(function (k) {
+      var on = !!checks[k];
+      return '<label class="check-row"><input type="checkbox" data-check="' + k + '"' +
+        (on ? " checked" : "") + "> " + esc(labels[k]) +
+        '<span class="st ' + (on ? "yes" : "no") + '">' + (on ? "DONE" : "TODO") + "</span></label>";
+    }).join("");
+    $("checks").querySelectorAll("[data-check]").forEach(function (cb) {
+      cb.addEventListener("change", async function () {
+        await API.setCheck(chefId, cb.dataset.check, cb.checked);
+        renderChecks(); renderHead();
+      });
+    });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
