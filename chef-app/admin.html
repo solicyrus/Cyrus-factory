@@ -120,7 +120,7 @@
       div.innerHTML = '<div class="modal-chef" style="border:0;margin:0 0 6px;padding:0">' +
         '<div class="chef-avatar">' + c.emoji + "</div>" +
         '<div class="t"><b>' + esc(c.name) + "</b><span>" + esc(c.cuisine) +
-        " · " + done + "/4 verified</span></div></div>" +
+        " · " + done + "/" + Object.keys(labels).length + " verified</span></div></div>" +
         Object.keys(labels).map(function (k) {
           var on = !!checks[k];
           return '<label class="check-row"><input type="checkbox" data-chef="' +
