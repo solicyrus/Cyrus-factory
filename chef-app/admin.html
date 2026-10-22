@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Top 20 Chefs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back-link" href="index.html">← APP</a>
+    <h2>Admin Panel</h2>
+  </div>
+  <hr class="gold-rule">
+
+  <div class="page-pad">
+    <h3 class="section-title">Orders</h3>
+    <div class="filter-row" id="filters">
+      <button data-f="all" class="on">All</button>
+      <button data-f="Pending Kitchen Approval">Pending</button>
+      <button data-f="Confirmed">Confirmed</button>
+    </div>
+    <div class="panel" id="orders"></div>
+
+    <h3 class="section-title">Platform revenue</h3>
+    <div class="panel" id="revenue"></div>
+
+    <h3 class="section-title">Commission rates</h3>
+    <div class="panel" id="rates"></div>
+
+    <h3 class="section-title">Chef verification</h3>
+    <div id="chefs"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/chef.js"></script>
+<script>
+(function () {
+  "use strict";
+  var S = window.CHEFAPP, API = window.ChefAPI;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  var filter = "all";
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("show"); }, 2400);
+  }
+  function money(n) { return "$" + Number(n).toFixed(n % 1 ? 2 : 0); }
+  function cents(c) { return "$" + (Number(c || 0) / 100).toFixed(2); }
+
+  document.querySelectorAll("#filters button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      filter = b.dataset.f;
+      document.querySelectorAll("#filters button").forEach(function (x) {
+        x.classList.toggle("on", x === b);
+      });
+      renderOrders();
+    });
+  });
+
+  async function renderOrders() {
+    var orders = await API.listAllOrders(filter);
+    var box = $("orders");
+    if (!orders.length) {
+      box.innerHTML = '<div class="empty-note">No orders match this filter.</div>';
+      return;
+    }
+    box.innerHTML = orders.map(function (o) {
+      var confirmed = o.status === "Confirmed";
+      var price = o.total_cents != null ? cents(o.total_cents)
+        : (o.dish.price ? money(o.dish.price * (o.qty || 1)) : "");
+      var split = o.platform_fee_cents != null
+        ? "fee " + cents(o.platform_fee_cents) + " · chef " + cents(o.chef_payout_cents)
+        : "";
+      return '<div class="order-line"><div style="font-size:24px">' +
+        (o.dish.emoji || "🍽️") + '</div><div class="grow"><b>' +
+        esc(o.dish.short_name || "Dish") + " × " + (o.qty || 1) + " · " + price + "</b>" +
+        "<span>" + esc((o.chef && o.chef.name) || "") + " · " + esc(o.day) +
+        " · " + esc(o.delivery_type) +
+        (split ? "<br>" + split : "") + "<br>" + esc(o.id) + " · " +
+        new Date(o.created_at).toLocaleString("en-US",
+          { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) +
+        "</span></div>" +
+        (confirmed
+          ? '<div class="status-pill confirmed">CONFIRMED</div>'
+          : '<button class="btn btn-gold btn-sm" data-confirm="' + esc(o.id) + '">Confirm</button>') +
+        "</div>";
+    }).join("");
+    box.querySelectorAll("[data-confirm]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        await API.confirmOrder(b.dataset.confirm);
+        toast("Order confirmed"); renderOrders();
+      });
+    });
+  }
+
+  async function renderChefs() {
+    var chefs = await API.listAllChefs();
+    var labels = S.CHECK_LABELS;
+    var box = $("chefs");
+    box.innerHTML = "";
+    for (var i = 0; i < chefs.length; i++) {
+      var c = chefs[i];
+      var checks = await API.getChecks(c.id);
+      var done = Object.keys(labels).filter(function (k) { return checks[k]; }).length;
+      var div = document.createElement("div");
+      div.className = "panel";
+      div.innerHTML = '<div class="modal-chef" style="border:0;margin:0 0 6px;padding:0">' +
+        '<div class="chef-avatar">' + c.emoji + "</div>" +
+        '<div class="t"><b>' + esc(c.name) + "</b><span>" + esc(c.cuisine) +
+        " · " + done + "/4 verified</span></div></div>" +
+        Object.keys(labels).map(function (k) {
+          var on = !!checks[k];
+          return '<label class="check-row"><input type="checkbox" data-chef="' +
+            esc(c.id) + '" data-check="' + k + '"' + (on ? " checked" : "") + "> " +
+            esc(labels[k]) + '<span class="st ' + (on ? "yes" : "no") + '">' +
+            (on ? "DONE" : "TODO") + "</span></label>";
+        }).join("");
+      box.appendChild(div);
+    }
+    box.querySelectorAll("[data-check]").forEach(function (cb) {
+      cb.addEventListener("change", async function () {
+        await API.setCheck(cb.dataset.chef, cb.dataset.check, cb.checked);
+        toast("Checklist updated"); renderChefs();
+      });
+    });
+  }
+
+  async function renderRevenue() {
+    var t = await API.platformTotals();
+    var box = $("revenue");
+    var row = function (label, val, gold) {
+      return '<div style="display:flex;justify-content:space-between;padding:6px 0">' +
+        '<span style="color:var(--muted)">' + label + "</span>" +
+        '<b style="' + (gold ? "color:var(--gold)" : "") + '">' + val + "</b></div>";
+    };
+    var html = row("Total commission collected", cents(t.total_fee_cents), true) +
+      row("Total gross sales", cents(t.total_gross_cents)) +
+      row("Total chef payouts", cents(t.total_payout_cents)) +
+      row("Orders", t.order_count) +
+      '<hr class="gold-rule" style="margin:10px 0">' +
+      '<div style="display:flex;justify-content:space-between;padding:4px 0;' +
+      'font-size:12px;color:var(--muted)"><span>CHEF</span>' +
+      "<span>RATE · GROSS · FEE · PAYOUT</span></div>" +
+      t.per_chef.map(function (e) {
+        return '<div style="display:flex;justify-content:space-between;' +
+          'padding:6px 0;font-size:13px;border-top:1px solid rgba(212,175,55,.12)">' +
+          "<span><b>" + esc(e.chef_name) + "</b> · " + e.order_count + " orders</span>" +
+          '<span style="text-align:right">' + Math.round(e.rate * 100) + "% · " +
+          cents(e.gross_cents) + " · <b style=\"color:var(--gold)\">" +
+          cents(e.fee_cents) + "</b> · " + cents(e.payout_cents) + "</span></div>";
+      }).join("");
+    box.innerHTML = html;
+  }
+
+  async function renderRates() {
+    var chefs = await API.listAllChefs();
+    var box = $("rates");
+    box.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0 0 10px">' +
+      "Changing a rate affects NEW orders only — past orders keep their recorded fee.</p>" +
+      chefs.map(function (c) {
+        var r = (c.commission_rate != null) ? Number(c.commission_rate) : 0.10;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;' +
+          'border-top:1px solid rgba(212,175,55,.12)">' +
+          '<div style="flex:1"><b>' + esc(c.name) + "</b><br>" +
+          '<span style="color:var(--muted);font-size:12px">now ' +
+          Math.round(r * 100) + "%</span></div>" +
+          '<input class="input" type="number" min="0" max="50" step="1" value="' +
+          Math.round(r * 100) + '" data-rate="' + esc(c.id) + '" ' +
+          'style="width:70px;text-align:center"><span style="color:var(--muted)">%</span>' +
+          '<button class="btn btn-gold btn-sm" data-saverate="' + esc(c.id) + '">Save</button>' +
+          "</div>";
+      }).join("");
+    box.querySelectorAll("[data-saverate]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var id = b.dataset.saverate;
+        var inp = box.querySelector('[data-rate="' + id + '"]');
+        var res = await API.setCommissionRate(id, Number(inp.value) / 100);
+        if (res.ok) {
+          toast("Rate set to " + Math.round(res.rate * 100) + "%");
+          renderRates(); renderRevenue();
+        } else toast("Could not save rate");
+      });
+    });
+  }
+
+  renderOrders();
+  renderChefs();
+  renderRevenue();
+  renderRates();
+})();
+</script>
+</body>
+</html>
