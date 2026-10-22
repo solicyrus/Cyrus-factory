@@ -1,22 +1,27 @@
-"""CYRUS TEAM — Factory HQ brain.
+"""CYRUS TEAM — Factory HQ brain v2.0.
 
 A small, honest agent factory: a registry of REAL agents (Python modules
 that do actual work), departments, a human-in-the-loop approval queue, and
-an activity log. Nothing is fake — an agent is only listed if its run()
-does something verifiable.
+an activity log. v2.0 adds the LEARNING LOOP: every agent reads its past
+outcomes before running (agents/learn.py), and every approve/reject teaches
+the agent that produced the draft. Creative agents can also use a shared
+LLM backend (agents/llm.py) when API keys are set - otherwise they fall
+back to deterministic rule-based mode.
 
 Run:  ./venv/bin/python app.py   ->  http://localhost:5050
 """
 import importlib
 import json
 import os
-import time
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, render_template
 
+from agents import learn
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE, "factory_state.json")
+VERSION = "v2.0"
 
 app = Flask(__name__)
 
@@ -24,39 +29,95 @@ AGENT_MODULES = {
     "bug_hunter": "agents.bug_hunter",
     "content_writer": "agents.content_writer",
     "knowledge_improver": "agents.knowledge_improver",
+    "idea_maker": "agents.idea_maker",
+    "support_tone": "agents.support_tone",
+    "market_analyst": "agents.market_analyst",
+    "translator_check": "agents.translator_check",
+    "ads_angles": "agents.ads_angles",
+    "deploy_checker": "agents.deploy_checker",
+    "shorts_planner": "agents.shorts_planner",
+    "inbox_triage": "agents.inbox_triage",
+    "qa_tester": "agents.qa_tester",
+    "review_watcher": "agents.review_watcher",
+    "pricing_guard": "agents.pricing_guard",
+    "seo_writer": "agents.seo_writer",
+    "competitor_watch": "agents.competitor_watch",
+    "deadline_guard": "agents.deadline_guard",
+    "testimonial_drafter": "agents.testimonial_drafter",
+    "faq_builder": "agents.faq_builder",
+    "nightly_reporter": "agents.nightly_reporter",
 }
+
+# Which JSON body keys each agent accepts on POST /api/run/<agent>
+AGENT_PARAMS = {
+    "content_writer": ["topic"],
+    "support_tone": ["message", "reply"],
+    "market_analyst": ["text"],
+    "qa_tester": ["text"],
+    "pricing_guard": ["text"],
+    "seo_writer": ["topic"],
+}
+
+# (id, display name, department, description)
+AGENT_DEFS = [
+    ("bug_hunter", "Bug Hunter", "ENGINEERING",
+     "Live health checks: app homepage, sw.js version, main site, knowledge file sections."),
+    ("deploy_checker", "Deploy Checker", "OPS",
+     "Live deploy checks: app, main site, USA subdomain, service worker."),
+    ("knowledge_improver", "Knowledge Improver", "BRAIN",
+     "Inspects the staged knowledge file: sections A-N, Section N hard-rule keywords."),
+    ("qa_tester", "QA Tester", "QUALITY",
+     "5 hardcoded honesty trap checks on any text (prices, phones, visa claims)."),
+    ("translator_check", "Translator Check", "QUALITY",
+     "Verifies the 6-language closing lines: presence, formality, price in knowledge."),
+    ("pricing_guard", "Pricing Guard", "QUALITY",
+     "Scans text for any price and checks it against the real prices.json catalog."),
+    ("content_writer", "Content Writer", "CONTENT",
+     "Drafts YouTube Shorts title/description/hashtags packs for approval."),
+    ("shorts_planner", "Shorts Planner", "CONTENT",
+     "Builds a 1-week Shorts calendar (Sat/Mon/Wed slots) with title ideas."),
+    ("seo_writer", "SEO Writer", "CONTENT",
+     "Drafts an SEO article outline (title, headings, CTA) for a topic."),
+    ("idea_maker", "Idea Maker", "IDEAS",
+     "Generates 3 concrete business ideas for the tour business."),
+    ("support_tone", "Support Tone", "SUPPORT",
+     "Checks a customer reply against tone rules: honest, short, no fake promises."),
+    ("faq_builder", "FAQ Builder", "SUPPORT",
+     "Drafts 3 FAQ entries with honest short answers for Cyrus AI."),
+    ("market_analyst", "Market Analyst", "MARKET",
+     "Flags price inconsistencies in text against the real prices catalog."),
+    ("review_watcher", "Review Watcher", "MARKET",
+     "Flags negative/urgent reviews needing a reply, with a reply template."),
+    ("competitor_watch", "Competitor Watch", "MARKET",
+     "HTTP-checks competitor sites for downtime or status changes."),
+    ("ads_angles", "Ads Angles", "MARKETING",
+     "Drafts 3 honest ad angles for Cyrus AI."),
+    ("testimonial_drafter", "Testimonial Drafter", "MARKETING",
+     "Drafts a short, polite review-request message."),
+    ("inbox_triage", "Inbox Triage", "OPS",
+     "Classifies inbox items: urgent / can-wait / ignore."),
+    ("deadline_guard", "Deadline Guard", "OPS",
+     "Lists business deadlines within 30 days; urgent ones within 7."),
+    ("nightly_reporter", "Nightly Reporter", "OPS",
+     "Composes the nightly Persian business summary draft from the activity log."),
+]
 
 
 def seed_state():
+    departments = {}
+    agents = {}
+    for aid, name, dept, desc in AGENT_DEFS:
+        departments.setdefault(dept, {"agents": []})["agents"].append(aid)
+        agents[aid] = {
+            "name": name, "department": dept, "description": desc,
+            "status": "idle", "last_run": None, "last_result": None,
+        }
     return {
         "factory": "CYRUS TEAM - Factory HQ",
-        "version": "v1.0",
+        "version": VERSION,
         "mode": "human-in-the-loop",
-        "departments": {
-            "ENGINEERING": {"agents": ["bug_hunter"]},
-            "CONTENT": {"agents": ["content_writer"]},
-            "BRAIN": {"agents": ["knowledge_improver"]},
-        },
-        "agents": {
-            "bug_hunter": {
-                "name": "Bug Hunter",
-                "department": "ENGINEERING",
-                "description": "Live health checks: app homepage, sw.js version, main site, knowledge file sections.",
-                "status": "idle", "last_run": None, "last_result": None,
-            },
-            "content_writer": {
-                "name": "Content Writer",
-                "department": "CONTENT",
-                "description": "Drafts YouTube Shorts title/description/hashtags packs for approval.",
-                "status": "idle", "last_run": None, "last_result": None,
-            },
-            "knowledge_improver": {
-                "name": "Knowledge Improver",
-                "department": "BRAIN",
-                "description": "Inspects the staged knowledge file: sections A-N, Section N hard-rule keywords.",
-                "status": "idle", "last_run": None, "last_result": None,
-            },
-        },
+        "departments": departments,
+        "agents": agents,
         "approvals": [
             {
                 "id": "ap-zoom-001",
@@ -72,13 +133,37 @@ def seed_state():
     }
 
 
+def _migrate(state):
+    """Upgrade an older state file to the current version without losing
+    approvals, activity or decisions."""
+    if state.get("version") == VERSION:
+        return state
+    seed = seed_state()
+    for dept, dinfo in seed["departments"].items():
+        if dept not in state["departments"]:
+            state["departments"][dept] = dinfo
+        else:
+            for aid in dinfo["agents"]:
+                if aid not in state["departments"][dept]["agents"]:
+                    state["departments"][dept]["agents"].append(aid)
+    for aid, ainfo in seed["agents"].items():
+        if aid not in state["agents"]:
+            state["agents"][aid] = ainfo
+    state["version"] = VERSION
+    return state
+
+
 def load_state():
     if not os.path.exists(STATE_FILE):
         state = seed_state()
         save_state(state)
         return state
     with open(STATE_FILE, encoding="utf-8") as f:
-        return json.load(f)
+        state = json.load(f)
+    if state.get("version") != VERSION:
+        state = _migrate(state)
+        save_state(state)
+    return state
 
 
 def save_state(state):
@@ -131,10 +216,8 @@ def api_run(agent_id):
     save_state(s)
     try:
         mod = importlib.import_module(AGENT_MODULES[agent_id])
-        kwargs = {}
-        if agent_id == "content_writer":
-            data = request.get_json(silent=True) or {}
-            kwargs["topic"] = data.get("topic", "hidden gem in Victoria BC")
+        data = request.get_json(silent=True) or {}
+        kwargs = {k: data[k] for k in AGENT_PARAMS.get(agent_id, []) if k in data}
         result = mod.run(**kwargs)
     except Exception as e:  # never let an agent crash the factory
         result = {"ok": False, "summary": f"agent crashed: {e}",
@@ -143,12 +226,22 @@ def api_run(agent_id):
     agent["status"] = "idle"
     agent["last_run"] = now
     agent["last_result"] = result.get("summary")
+    # The agent logs its own run via agents/learn.py and returns the run_id
+    # in details; fall back to logging here if it didn't.
+    run_id = (result.get("details") or {}).get("run_id")
+    if not run_id:
+        try:
+            run_id = learn.log_run(agent_id, json.dumps(kwargs)[:200] or "manual run",
+                                   result.get("summary", ""))
+        except Exception:
+            run_id = None
     for p in result.get("proposed_approvals", []):
         aid = f"ap-{s['next_approval_id']:03d}"
         s["next_approval_id"] += 1
         s["approvals"].insert(0, {
             "id": aid, "title": p["title"], "kind": p.get("kind", "general"),
             "detail": p.get("detail", ""), "status": "pending", "created": now,
+            "agent": agent_id, "run_id": run_id,
         })
     log(s, agent["name"], f"run finished: {result.get('summary')}")
     save_state(s)
@@ -169,9 +262,20 @@ def api_approval_action(aid, action):
         if a["id"] == aid:
             if a["status"] != "pending":
                 return jsonify({"error": "already decided"}), 400
+            data = request.get_json(silent=True) or {}
+            note = str(data.get("note", ""))[:400]
             a["status"] = "approved" if action == "approve" else "rejected"
             a["decided"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            if note:
+                a["note"] = note
             log(s, "Cyrus (HQ)", f"{action}d: {a['title'][:70]}")
+            # THE LEARNING LOOP: teach the originating agent what happened.
+            # Never let a learning failure break the approval itself.
+            try:
+                learn.log_outcome(a.get("agent") or "hq", a.get("run_id"),
+                                  action == "approve", note)
+            except Exception:
+                pass
             save_state(s)
             return jsonify({"ok": True, "id": aid, "status": a["status"]})
     return jsonify({"error": "not found"}), 404
@@ -183,5 +287,5 @@ def api_activity():
 
 
 if __name__ == "__main__":
-    print("CYRUS TEAM - Factory HQ on http://localhost:5050")
+    print("CYRUS TEAM - Factory HQ v2.0 on http://localhost:5050")
     app.run(host="127.0.0.1", port=5050, debug=False)
