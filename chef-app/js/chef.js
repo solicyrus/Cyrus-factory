@@ -206,7 +206,8 @@ window.ChefAPI = (function () {
       return (chef && chef.checks) || {};
     },
     setCheck: async function (chefId, key, value) {
-      var allowed = ["foodsafe", "island_health", "insurance", "tasting"];
+      var allowed = ["foodsafe", "approved_kitchen", "island_health",
+                       "business_licence", "insurance", "labels", "tasting"];
       if (allowed.indexOf(key) === -1) return { ok: false, reason: "bad_key" };
       var v = !!value;
       if (S.isSupabaseMode()) {
